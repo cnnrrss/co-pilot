@@ -1,0 +1,13 @@
+version: '3'
+services:
+  redis:
+    healthcheck:
+      test: redis-cli info
+      retries: 3
+      timeout: 10s
+      interval: 2s
+    ports:
+      - 6379:6379
+    image: "redis:alpine"
+    container_name: copilot_redis
+    tty: true
