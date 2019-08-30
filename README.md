@@ -62,8 +62,6 @@ Gin - Middleware and routing framework, this might be overkill for this challeng
 
 Use curl or a tool like postman to test the api.
 
-##### Single Contact
-
 **GET** - Get contact
 ```bash
 curl -X GET \
@@ -80,7 +78,7 @@ https://private-82d61-autopilot.apiary-mock.com/v1/contact/person_9EAF39E4 \
   -H 'cache-control: no-cache'
 ```
 
-**POST** - Update New Contact
+**POST** - Upsert Contact
 ```bash
 curl -X POST \
   http://localhost:8080/api/contact/ \
@@ -99,12 +97,12 @@ curl -X POST \
   -d '{"contact": {"FirstName": "Slarty","LastName": "Bartfast","Email":"test@slarty.com","custom": { "string--Test--Field":}}'
 ```
 
-##### Known bugs:
+### Known bugs:
 - Support all APIs (right now only supports mockserver) 
 - Handle case where data in cache cannot be unmarshalled (should we hit API?)
 - Handle name and contact_id as key for caching (right now only supports contact_id)
 
-##### Improvements, given more time..
+### Improvements, given more time..
 - Remove some hardcoded things
 - Better logging / api response formatting
 - Testcases (mock http requests)
