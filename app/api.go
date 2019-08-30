@@ -1,76 +1,98 @@
 package copilot
 
 import (
+	"encoding/json"
 	"fmt"
+	"io/ioutil"
+	"log"
 	"net/http"
 
+	"github.com/cnnrrss/co-pilot/api"
 	"github.com/gin-gonic/gin"
 )
 
-// MsgFlags maps an error code to a msg
-var MsgFlags = map[int]string{
-	http.StatusOK:         "ok",
-	http.StatusBadRequest: "invalid params",
-}
-
-// Response is a response struct for uniform responses from the API server
-type Response struct {
-	Code int         `json:"code"`
-	Msg  string      `json:"msg"`
-	Data interface{} `json:"data"`
-}
-
-// GetContactByID ...
+// GetContactByID takes the ID from the url param and returns the contact from the cache or API
 func (s *Server) GetContactByID(c *gin.Context) {
 	var err error
-
-	id := c.Query("id")
-	if id == "" {
-		response(c, http.StatusBadRequest, err)
-	}
-
-	// Don't handle error from cache at this point in time
-	contact, _ := s.cache.GetContactByID(id)
-	if len(contact) == 0 {
-		// TODO here is where the call to Autopilot API will go
-		// if no results retrieved from cache, waiting for API access
-
-		// TODO if we retrieved data from the cache, we should make
-		// a call to set the retrieved contact in cache
-	}
-
-	response(c, http.StatusOK, fmt.Sprintf("%v", contact))
-}
-
-// CreateContact ...
-func (s *Server) CreateContact(c *gin.Context) {
 	var contact Contact
-	c.BindJSON(&contact)
-	s.cache.SetContactByID(contact.contact_id, contact.FirstName)
-	response(c, http.StatusOK, fmt.Sprintf("contact %s successfully created", contact.FirstName))
-}
 
-// UpdateContactByID ...
-func (s *Server) UpdateContactByID(c *gin.Context) {
-	response(c, http.StatusOK, fmt.Sprintf("updated contact"))
-}
+	id := c.Param("id")
+	if id == "" {
+		response(c, http.StatusBadRequest, fmt.Sprintf("%v", err), nil)
+		return
+	}
 
-func response(c *gin.Context, httpCode int, data interface{}) {
-	c.JSON(httpCode, Response{
-		Code: httpCode,
-		Msg:  getMsg(httpCode),
-		Data: data,
-	})
+	// Ignore error if not found int cache
+	cacheResp, _ := s.cache.GetContactByID(id)
+	if len(cacheResp) > 0 {
+		err = json.Unmarshal(cacheResp, &contact)
+		if err != nil {
+			log.Printf("Could not unmarshal json from cache %s\n", err)
+			return
+		}
+
+		response(c, http.StatusOK, fmt.Sprintf("contact from cache"), contact)
+		return
+	}
+
+	resp, err := api.GetContact(id)
+	if err != nil {
+		response(c, http.StatusBadRequest, fmt.Sprintf("%v", err), nil)
+		return
+	}
+
+	data, err := ioutil.ReadAll(resp.Body)
+	if err != nil {
+		response(c, http.StatusBadRequest, fmt.Sprintf("%v", err), nil)
+		return
+	}
+	json.Unmarshal(data, &contact)
+
+	err = s.cache.SetContactByID(id, contact)
+	if err != nil {
+		log.Printf("Could not update cache %s\n", err)
+	}
+
+	response(c, http.StatusOK, fmt.Sprintf("contact from api"), contact)
 	return
 }
 
-func getMsg(code int) string {
-	msg, ok := MsgFlags[code]
-	if ok {
-		return msg
+// UpsertContact sends a request to Create/Update a contact to the API
+func (s *Server) UpsertContact(c *gin.Context) {
+	var contact Contact
+
+	reqData, err := ioutil.ReadAll(c.Request.Body)
+	if err != nil {
+		response(c, http.StatusBadRequest, fmt.Sprintf("%v", err), nil)
+		return
 	}
 
-	return MsgFlags[http.StatusBadRequest]
+	resp, err := api.CreateContact(reqData)
+	if err != nil {
+		response(c, http.StatusBadRequest, fmt.Sprintf("%v", err), nil)
+		return
+	}
+
+	respData, err := ioutil.ReadAll(resp.Body)
+	fmt.Println(string(respData))
+	if err != nil {
+		response(c, http.StatusBadRequest, fmt.Sprintf("%v", err), nil)
+		return
+	}
+	json.Unmarshal(respData, &contact)
+
+	// invalidate cache if contact existed
+	s.cache.DeleteContactByID(contact.ID)
+	response(c, http.StatusOK, fmt.Sprintf("contact %s successfully created", contact.ID), nil)
+	return
+}
+
+func response(c *gin.Context, httpCode int, message string, data interface{}) {
+	c.JSON(httpCode, gin.H{
+		"code":    httpCode,
+		"message": message,
+		"data":    data,
+	})
 }
 
 func (s *Server) ping(c *gin.Context) {

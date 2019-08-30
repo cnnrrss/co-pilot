@@ -1,9 +1,10 @@
 package copilot
 
 import (
-	"flag"
+	"errors"
 	"fmt"
 	"os"
+	"strconv"
 )
 
 // Config for the API server
@@ -11,9 +12,8 @@ type Config struct {
 	port      string
 	cacheHost string
 	cacheURL  string
-	// version   bool
-	debug bool
-	clean bool
+	apiKey    string
+	clean     bool
 }
 
 // Conf global for the API server
@@ -21,23 +21,17 @@ var Conf Config
 
 func parseConfig() (Config, error) {
 	var conf = Config{}
-	var clean, debug bool
-	// version,
-	// flag.BoolVar(&version, "version", false, "API Version")
-	flag.BoolVar(&clean, "clean", false, "Clean cache")
-	flag.BoolVar(&debug, "debug", false, "Debug API")
-	flag.Parse()
+
+	conf.apiKey = getEnv("API_KEY", "")
+	if conf.apiKey == "" {
+		return conf, errors.New("api key cannot be empty")
+	}
 
 	conf.port = getEnv("PORT", "8080")
 	conf.cacheHost = getEnv("CACHE_HOST", "redis")
 	conf.cacheURL = fmt.Sprintf("redis://%s:6379/0", conf.cacheHost)
-	// conf.version = version
-	conf.debug = debug
+	clean, _ := strconv.ParseBool(getEnv("CACHE_FLUSH", "FALSE"))
 	conf.clean = clean
-
-	if debug != false {
-		// app.StartProfiler()
-	}
 
 	return conf, nil
 }

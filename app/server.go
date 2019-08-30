@@ -2,6 +2,7 @@ package copilot
 
 import (
 	"fmt"
+	"log"
 	"os"
 
 	"github.com/gin-gonic/gin"
@@ -26,9 +27,14 @@ func (s *Server) Start(router *gin.Engine) {
 	router.GET("/ping", s.ping)
 
 	apiv1 := router.Group("/api")
-	apiv1.GET("/contact", s.GetContactByID)
-	apiv1.POST("/contact/:id", s.CreateContact)
-	apiv1.PUT("/contact/:id", s.UpdateContactByID)
+	apiv1.GET("/contact/:id", s.GetContactByID)
+	apiv1.POST("/contact/", s.UpsertContact)
+	apiv1.PUT("/contact/", s.UpsertContact)
+
+	if Conf.clean == true {
+		log.Println("Flushing the cache..")
+		s.cache.CleanCache()
+	}
 
 	err := router.Run(fmt.Sprintf(":%s", Conf.port))
 	if err != nil {
